@@ -1,0 +1,64 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fswiss\fcharset0 Helvetica-Bold;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 Author: Mich Lin (shuyulin [at] mit [dot] edu)\
+Last updated: 3 NOV 2025\
+\
+This suite of code is written to process SHAQ (Subjective Habitability and Acceptability Questionnaire) and POMS (Profile of Mood States) for HERA (Human Exploration Research Analog) Campaigns 5 and 6. \
+\
+Habitat areas: \
+# 1 sleep\
+# 2 hygiene\
+# 3 work\
+# 4 kitchen\
+\
+BHP Outcomes\
+Mood, Stress, Sleep, IndivPerf, TeamPerf, Social Interaction\
+\
+Psych aspects of habitability\
+1 - privacy; 2 - social density; 3 - efficiency\
+4 - control; 5 - comfort; 6 - convenience\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f1\b \cf0 data_cleaning.R\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\b0 \cf0 inputs: data files from BOX, SHAQ C5, 6 data (home/hotel/HERA) and POMS C4, 5, 6 data\
+Outputs: user saves manually at commented lines. rawdata.Rdata (imported data with full columns, not cleaned), workdata.Rdata
+\f1\b  (
+\f0\b0 cleaned, POMS interpolated to SHAQ mission days, SHAQ baselined data available by individual) \
+\
+This script imports the data from local working directory and saves as rawdata.Rdata. The mission parameters (campaign, mission, mission day, ID, habitat area) and relevant variables are kept (SHAQ - how, why\'92s for each habitat area; POMS - summary of each subconstruct). POMS is interpolated to SHAQ mission days for comparison. Both datasets are baselined using home values, substituted with hotel values when not available. This is saved as workdata.RData\
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f1\b \cf0 SHAQ_POMS_analysis.R\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\b0 \cf0 input: workdata.RData (generated from data_cleaning)\
+Visualizes data over each habitat (mood specific) with box/whiskers and violin plots. Checks for normality visually (not much we can do about non normal data according to work done on the archived version of the project). Using the baselined version of the data taken from data_cleaning.R, joins SHAQ and POMS values (this is SHAQ_POMS_baselined_byarea) and also creates an aggregated (over SHAQ) for a total habitat comparison between SHAQ and POMS. Runs Pearson\'92s correlations for each habitat area vs. POMS and the total habitat vs. POMS and stores the correlation coefficients and the p-values in separate matrices. Also performs data loss assessment to understand how much data is being lost through aggregation/averaging if na.rm = FALSE. Builds nlme (syntax is commented) based on selected fixed data, random data should be MD nested into ID. \
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f1\b \cf0 SHAQ_PCA.R\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\b0 \cf0 Input: rawdata.RData (generated from data_cleaning)\
+Remakes SHAQ datasets to make it easier to filter by both habitat area and BHP outcomes simultaneously, as those are the combinations of independent variables we\'92ll want for PCA. Creates function to run PCA by taking in the data frame, habitat area, and bhp outcome. Take note that the \'91how\'92 vector is not included, as the strength of these correlations to the dependent variable will be examined through a regression of the principle components. Note that the code throws an error when there are duplicated CM entries for a given day/habitat area (essentially an unnecessary survey entry), which needed to be removed for the HERA data since pivoting longer created duplicated rows. The first data entry is preserved.  \
+Also completes multiple linear regression (fixing habitat area) of BHP outcome to each PAH. Checks for normality (qq plots) and multicollinearity. \
+Plots each PAH (fixing habitat area and BHP outcome) over time with jitter to the line plots to help distinguish individual variation (to motivate mixed linear model). \
+\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f1\b \cf0 SHAQ_discrimination.R\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\b0 \cf0 input: rawdata.Rdata (generated from data_cleaning)\
+Remakes SHAQ datasets to make it easier to filter by both habitat area and BHP outcomes simultaneously and binds it all together after assigning \'91Habitat\'92 labels. Plots violin plots or ridge line plots with mean and SD error bars across each habitat environment while fixing habitat area, bhp outcome, and PAH. Can plot by aggregate total habitat or by habitat area. Runs ANOVA across habitat environment and a Tukey test for differences between the means of the home/hotel/HERA environments. \
+\
+}
