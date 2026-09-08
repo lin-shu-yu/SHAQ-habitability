@@ -11,6 +11,7 @@ library(tibble)
 library(dplyr)
 library("ggpubr")
 library(reticulate)
+library(tidyr)
 
 # set color palette for ggplot (colorblind accessible)
 cbPalette <- c("#999999","#E69F00","#56B4E9","#009E73",
@@ -145,76 +146,6 @@ POMS_interp <- rbind(POMS_MDt1, POMS_MD4, POMS_MD9, POMS_MD16, POMS_MD23,
 
 # save as workdata.RData
 
-##### baseline against home/hotel values #####
-# baselining function = HERA - home data (hotel when home is NA)
-baseline.SHAQ <- function(HERA_data, home_data, hotel_data){
-  y_home <- home_data %>%
-    group_by(Campaign, Mission, ID, Role, SHAQ_Hab_Area) %>%
-    reframe(
-      iperf_baseline = SHAQ_IndivPerf_How,
-      teamperf_baseline = SHAQ_TeamPerf_How,
-      mood_baseline = SHAQ_Mood_How,
-      stress_baseline = SHAQ_Stress_How,
-      sleep_baseline = SHAQ_Sleep_How,
-      social_baseline = SHAQ_Social_How
-    )
-  y_hotel <- hotel_data %>%
-    group_by(Campaign, Mission, ID, Role, SHAQ_Hab_Area) %>%
-    reframe(
-      iperf_baseline = SHAQ_IndivPerf_How,
-      teamperf_baseline = SHAQ_TeamPerf_How,
-      mood_baseline = SHAQ_Mood_How,
-      stress_baseline = SHAQ_Stress_How,
-      sleep_baseline = SHAQ_Sleep_How,
-      social_baseline = SHAQ_Social_How
-    )
-  # updating NA values in home
-  y_baseline <- rows_patch(y_home, y_hotel, by = c("Campaign", "Mission", "ID", "Role", "SHAQ_Hab_Area"))
-  
-  y <- left_join(HERA_data, y_baseline, by = c("Campaign","Mission","ID", "Role", "SHAQ_Hab_Area")) %>%
-    transmute(Campaign, Mission, ID, Role, MissionDay,SHAQ_Hab_Area,
-              iperf_delta = SHAQ_IndivPerf_How - iperf_baseline,
-              teamperf_delta = SHAQ_TeamPerf_How - teamperf_baseline,
-              mood_delta = SHAQ_Mood_How - mood_baseline,
-              stress_delta = SHAQ_Stress_How - stress_baseline,
-              sleep_delta = SHAQ_Sleep_How - sleep_baseline,
-              social_delta = SHAQ_Social_How - social_baseline)
-  
-  return(y)
-}
-
-baseline.POMS <- function(interp_data, data){
-  y_baseline <- subset(data, MissionDay<0) %>%
-    group_by(Campaign, Mission, ID, Role) %>%
-    reframe(
-      # na.rm = TRUE
-      anxiety_baseline = mean(POMS_TensionAnxiety_Sum),
-      depression_baseline = mean(POMS_DepressionDejection_Sum),
-      anger_baseline = mean(POMS_AngerHostility_Sum),
-      fatigue_baseline = mean(POMS_FatigueInertia_Sum),
-      vigor_baseline = mean(POMS_VigorActivity_Sum),
-      confusion_baseline = mean(POMS_ConfusionBewilderment_Sum),
-      mood_baseline = mean(POMS_TotalMoodDist_Sum)
-    )
-  
-  y <- left_join(interp_data, y_baseline, by = c("Campaign", "Mission", "ID", "Role")) %>%
-    transmute(Campaign, Mission, ID, MissionDay, Role, 
-              anxiety_delta = Anxiety_mean - anxiety_baseline,
-              depression_delta = Depression_mean - depression_baseline,
-              anger_delta = Anger_mean - anger_baseline,
-              fatigue_delta = Fatigue_mean - fatigue_baseline,
-              vigor_delta = Vigor_mean - vigor_baseline,
-              confusion_delta = Confusion_mean - confusion_baseline,
-              mood_delta = MoodTotal_mean - mood_baseline)
-  
-  return(y)
-}
-
-SHAQ_baselined <- baseline.SHAQ(SHAQ_HERA, SHAQ_Home, SHAQ_Hotel)
-POMS_baselined <- baseline.POMS(POMS_interp,POMS)
-
-# saved as baselined.RData
-
 ##### create different configurations of the data #####
 rm(list = ls())
 
@@ -265,28 +196,6 @@ SHAQ_HERA <- SHAQ_HERA %>%
 # save as wide.RData
 
 ##### missing data analysis ##### 
-# outdated code (we no longer use baselined data for calculations) 
-# that helped us to determine if we should perform na.rm or propagate NA's
-# determined to use na.rm; otherwise data becomes too sparse
-
-# # counting missing data for baselined data
-# load("~/MIT Dropbox/Mich Lin/Research/behavioral_health/hera_nek/shaq_code/data/baselined.RData")
-
-# # keeping track of how many areas are missing per BHP outcome
-# missing_iperf <- SHAQ_baselined %>% group_by(ID, MissionDay) %>% summarise(count=sum(is.na(iperf_delta))) %>% arrange(desc(count))
-# missing_teamperf <- SHAQ_baselined %>% group_by(ID, MissionDay) %>% summarise(count=sum(is.na(teamperf_delta))) %>% arrange(desc(count))
-# missing_stress <- SHAQ_baselined %>% group_by(ID, MissionDay) %>% summarise(count=sum(is.na(stress_delta))) %>% arrange(desc(count))
-# missing_mood <- SHAQ_baselined %>% group_by(ID, MissionDay) %>% summarise(count=sum(is.na(mood_delta))) %>% arrange(desc(count))
-# missing_sleep <- SHAQ_baselined %>% group_by(ID, MissionDay) %>% summarise(count=sum(is.na(sleep_delta))) %>% arrange(desc(count))
-# missing_social <- SHAQ_baselined %>% group_by(ID, MissionDay) %>% summarise(count=sum(is.na(social_delta))) %>% arrange(desc(count))
-# missing_byarea <- SHAQ_baselined %>% group_by(SHAQ_Hab_Area) %>% summarise(count=sum(is.na(social_delta)))
-
-# # # find missing POMS data
-# missing_POMS <- which(is.na(POMS), arr.ind = TRUE) %>% as.data.frame() %>% 
-#   pivot_wider(names_from = row, values_from = col)
-
-load("~/MIT Dropbox/Mich Lin/Research/behavioral_health/hera_nek/shaq_code/data/wide.RData")
-
 # count percentage of missing data overall
 for (i in 1:4) {
   BHP <- "Social" # change out BHP parameter here (IndivPerf, TeamPerf, Stress, Mood, Sleep, Social)

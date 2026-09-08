@@ -41,7 +41,7 @@ SHAQ <- rbind(SHAQ_Home, SHAQ_Hotel, SHAQ_HERA) %>% mutate(Habitat =
                                                              ))
 
 
-##### total habitat aggregate #####
+##### plotting #####
 PAH_lab <- c("Privacy", "Social Density", "Efficiency","Control","Comfort", "Convenience")
 hab_areas_lab <- c("Sleep","Hygiene","Work","Galley")
 
@@ -110,82 +110,86 @@ for (i in why_vec) {
   print(discrimination_plot(SHAQ, 1, "Mood", i))
 }
 
-# summary statistics (psych-describe) for reporting // change PAH/BHP/area/habitat
-describe(subset(SHAQ, SHAQ_Hab_Area == 1 & BHP_Outcome == "Mood" & Habitat == "HERA"))
+###### testing for significant differences between mean mood in habitat env #####
+# unit test
+# summary(lme(data = subset(SHAQ, SHAQ_Hab_Area == 3 & BHP_Outcome == "Sleep") %>% 
+# na.omit(), fixed = Why_6 ~ Habitat, random = ~ 1 | ID))
 
-# put together table in latex form
-describe_disc_latex <- function(hab_area, hab_env){
-  mean_df <- data.frame(matrix(ncol = 6, nrow = 6))
-  sd_df <- data.frame(matrix(ncol = 6, nrow = 6))
-  for (i in 1:6){
-   # 10-15 are positions of why 1-6; transpose and add as a col vector
-   mean_df[,i] <- psych::describe(subset(SHAQ, SHAQ_Hab_Area == hab_area & BHP_Outcome == BHP_vec[i] & Habitat == hab_env))$mean[10:15]
-  sd_df[,i] <- psych::describe(subset(SHAQ, SHAQ_Hab_Area == hab_area & BHP_Outcome == BHP_vec[i] & Habitat == hab_env))$sd[10:15]
- }
+emmeans_obj <- emmeans(lme(data = subset(SHAQ, SHAQ_Hab_Area == 1 & BHP_Outcome == "Stress") %>% 
+                             na.omit(), fixed = Why_2 ~ Habitat, random = ~ 1 | ID), pairwise ~ Habitat) %>% summary()
+emmeans_obj$emmeans$emmean %>% rev()
+emmeans_obj$emmeans$SE %>% rev()
 
- for (i in 1:6){
-   # cat for printing with double slashes
-   # paste0 for concat headers + other text
-   # paste for adding & delimiters in collapse function
-   # sprintf for running through numeric vectors
-  
-    cat(paste0("& ",hab_env, " & ", paste(sprintf("$%.1f \\pm %.1f$", mean_df[i,], sd_df[i,]), collapse = " &  &"), " &", " \\\\ \n"))
-   }
+# generating latex code for paper
+for (env in 1:3){ # iterate over env (home/hotel/HERA)
+  for (i in 4:4){ # iterate over habitat areas
+    mean_df <- data.frame(matrix(ncol = 6, nrow = 6))
+    sd_df <- data.frame(matrix(ncol = 6, nrow = 6))
+    for (j in 1:6){ # iterate over BHP outcomes
+      for (k in 1:6){ # iterate over why's
+        emmeans_obj <- emmeans(lme(data = subset(SHAQ, SHAQ_Hab_Area == i & BHP_Outcome == BHP_vec[j]) %>% 
+                                     na.omit(), fixed = as.formula(paste(why_vec[k], "~", "Habitat")), random = ~ 1 | ID), pairwise ~ Habitat) %>% summary()
+        
+        mean_df[k,j] <- emmeans_obj$emmeans$emmean %>% rev() %>% .[env]
+        sd_df[k,j] <- emmeans_obj$emmeans$SE %>% rev() %>% .[env]
+        
+      }
+    }
+  }
+  if (env == 1){ # printing home
+    for (i in 1:6){
+      # cat for printing with double slashes
+      # paste0 for concat headers + other text
+      # paste for adding & delimiters in collapse function
+      # sprintf for running through numeric vectors
+      cat(paste0("& ","Home", " & ", paste(sprintf("$%.1f \\pm %.1f$", mean_df[i,], sd_df[i,]), collapse = " &  &"), " &", " \\\\ \n"))
+    }
+  } else if (env == 2) {# printing hotel
+    for (i in 1:6){
+      cat(paste0("& ","Hotel", " & ", paste(sprintf("$%.1f \\pm %.1f$", mean_df[i,], sd_df[i,]), collapse = " &  &"), " &", " \\\\ \n"))
+    }
+  }
+  else {
+    for (i in 1:6){# printing HERA
+      cat(paste0("& ","HERA", " & ", paste(sprintf("$%.1f \\pm %.1f$", mean_df[i,], sd_df[i,]), collapse = " &  &"), " &", " \\\\ \n"))
+    }
+  }
 }
 
-describe_disc_latex(1, "Home")
-
-# generate per habitat area for all environments
-for (environments in c("Home","Hotel","HERA")){
-  # describe_disc_latex <- function(hab_area, hab_env)
-  describe_disc_latex(4, environments)
+# built function to run lme's and generate list of saved p-values
+# do not apply FWER correction here since adjusting using holm at the end
+PAH_lme <- function(hab_area_i, BHP_i, PAH_i){
+  emmeans_obj <- emmeans(lme(data = subset(SHAQ, SHAQ_Hab_Area == hab_area_i & BHP_Outcome == BHP_i) %>% na.omit(), 
+                             fixed = as.formula(paste(PAH_i, "~", "Habitat")), 
+                             random = ~ 1 | ID), pairwise ~ Habitat, adjust = "tukey") %>% 
+    summary()
+  # extract p values from summary
+  labels <- emmeans_obj$contrasts$contrast
+  p_vals <- emmeans_obj$contrasts$p.value %>% t() %>% as.data.frame()
+  names(p_vals) <- labels 
+  # save as list object under p_values, where the column names are the contrasts (e.g., home-hotel)
+  # and the values are the Tukey-adjusted p values
+  return(list(p_values = p_vals))
 }
-
-##### one way ANOVAs #####
-# test case
-# res.anova <- aov(formula = reformulate("Why_1") ~ Habitat, data = subset(SHAQ, SHAQ_Hab_Area == 1 & BHP_Outcome == "Sleep"))
-# summary(res.anova)
-# TukeyHSD(res.anova)
-
-# ANOVA accounting for multiple t tests, specifying habitat area (not the whole habitat)
-PAH_anova <- function(data, hab_area, BHP_outcome, PAH){
-  fo <- reformulate("Habitat", PAH) # function to help pass in string as variable
-  df <- subset(data, SHAQ_Hab_Area == hab_area & BHP_Outcome == BHP_outcome) # subset the df to be habitat area specific
-  res.anova <- aov(fo, df)
-  # res.anova <- aov(formula = as.name(PAH) ~ Habitat, data = subset(data, SHAQ_Hab_Area == hab_area & BHP_Outcome == BHP_outcome))
-  anova_summary <- summary(res.anova)
-  tukey_result <- TukeyHSD(res.anova)
-  
-  # Extract p-value from ANOVA summary
-  anova_p_value <- anova_summary[[1]]$`Pr(>F)`[1]
-  
-  # Extract adjusted p-values from TukeyHSD
-  tukey_p_values <- tukey_result$Habitat[, "p adj"]
-
-  return(list(ANOVA_p_value = anova_p_value, Tukey_p_values = tukey_p_values))
-}
-
-# assessing ANOVA & tukey results 
-# "Privacy", "Social Density", "Efficiency","Control","Comfort", "Convenience"
-test <- PAH_anova(SHAQ, 1, "Sleep",'Why_1')
 
 # run through all combinations to get raw p values
 all_p_values <- list()
 
-for (ha in c(1,2,3,4)) {
-  for (bhp in c("IndivPerf","TeamPerf","Mood","Stress","Sleep","Social")) {
-    for (pah in c("Why_1","Why_2","Why_3","Why_4","Why_5","Why_6")) {
-      results <- PAH_anova(SHAQ, ha, bhp, pah)
-      analysis_name <- paste(ha, bhp, pah, sep = "_")
+# iterate through combinations to save p values to list
+for (i in 1:4){ # iterate over habitat areas
+  for (j in 1:6){ # iterate over BHP outcomes
+    for (k in 1:6){ # iterate over why's
+      model_res <- PAH_lme(i, BHP_vec[j], why_vec[k])
+      
+      analysis_name <- paste(i, BHP_vec[j], why_vec[k], sep = "_")
       all_p_values[[analysis_name]] <- list(
-        ANOVA_p = results$ANOVA_p_value,
-        Tukey_p = results$Tukey_p_values
+        p_tukey = model_res$p_values
       )
     }
   }
 }
 
-all_raw_p_values <- unlist(lapply(all_p_values, function(x) c(x$ANOVA_p, x$Tukey_p)))
-adjusted_p_values_holm <- p.adjust(all_raw_p_values, method = "holm") # holm adjusted {p.adjust(pvalues, method = "bonferroni")}
-
-
+# holm adjusted p values over the whole list
+adjusted_p_values_holm <- p.adjust(unlist(lapply(all_p_values, function(x) c(x$p_tukey))), 
+                                   method = "holm") 
+adjusted_p_values_holm < 0.05

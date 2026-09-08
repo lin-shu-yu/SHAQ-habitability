@@ -241,7 +241,7 @@ qqline(POMS_interp$confusion)
 qqnorm(POMS_interp$mood_dist, main = "POMS Total Mood Disturbance")
 qqline(POMS_interp$mood_dist)
 
-##### spearmans's correlations by habitat area & overall #####
+##### repeated measures correlations by habitat area & overall #####
 # 1 sleep
 # 2 hygiene
 # 3 work
@@ -260,101 +260,13 @@ rownames(corr_SHAQ_POMS) <- c("corr coeff", "p-value")
 # using baselined data for SHAQ and POMS
 # combining C5 + C6
 for (i in 1:4){
-  res <- cor.test((subset(SHAQ_POMS_byarea, SHAQ_Hab_Area == i)$mood), 
-                  subset(SHAQ_POMS_byarea, SHAQ_Hab_Area == i)$POMS_TotalMoodDist_Sum,
-                  # method = "pearson") # if using pearson's r
-                  method = "spearman", exact=F) # if using spearman's rho
-  corr_SHAQ_POMS[1,i] <- res$estimate
-  corr_SHAQ_POMS[2,i] <- res$p.value
-}
-
-
-# pearson's correlations across habitat
-# build SHAQ POMS dataframe with SHAQ areas collapsed to a habitat mean
-SHAQ_totalhab <- SHAQ_HERA_short %>% 
-  group_by(Campaign, Mission, ID, MissionDay) %>% 
-  mutate(iperf_mean = mean(iperf, na.rm = TRUE), 
-          teamperf_mean = mean(teamperf, na.rm = TRUE),
-          mood_mean = mean((mood), na.rm = TRUE),
-          stress_mean = mean(stress, na.rm = TRUE),
-          sleep_mean = mean(sleep, na.rm = TRUE),
-          social_mean = mean(social, na.rm = TRUE),
-          .keep= "none") %>% 
-  distinct(ID, .keep_all = TRUE)
-
-# build dataframe keeping campaigns/missions/id/missionday present in SHAQ
-SHAQ_POMS_totalhab <- left_join(SHAQ_totalhab, POMS_HERA_select, by = c("Campaign","Mission","ID","MissionDay"))
-
-# pearsons's correlation for two mood vectors
-res <- cor.test(SHAQ_POMS_totalhab$mood_mean, # SHAQ hab total average
-                SHAQ_POMS_totalhab$POMS_TotalMoodDist_Sum, # POMS mood dist
-                # method = "pearson") # if using pearson's r
-               method = "spearman", exact=F) # if using spearman's rho
-corr_SHAQ_POMS[1,5] <- res$estimate
-corr_SHAQ_POMS[2,5] <- res$p.value
-
-##### differences in mood across habitat environments #####
-# ANOVA for SHAQ, then post-hoc tukey test
-SHAQ_aov <- aov(SHAQ_all$SHAQ_Mood_How~factor(SHAQ_all$Habitat))
-summary(SHAQ_aov)
-TukeyHSD(SHAQ_aov)
-
-# t test for POMS (only hotel/HERA)
-var.test(POMS_TotalMoodDist_Sum ~ Habitat, data = POMS_all) # -> unequal variances
-t.test(POMS_TotalMoodDist_Sum ~ Habitat, data = POMS_all) # therefore use Welch's test
-
-##### predictive power of SHAQ for POMS #####
-# plotting SHAQ/POMS per individual
-ggplot() + 
-  geom_line(data = POMS %>% subset((Campaign == 5|Campaign == 6) & MissionDay > 0), aes(x = MissionDay, y = POMS_TotalMoodDist_Sum),
-             color = 'gray') + 
-  geom_line(data = SHAQ_HERA, aes(x = MissionDay, y = SHAQ_Mood_How, color = SHAQ_Hab_Area), 
-              ) +
-  xlab('Mission Day') + ylab('Mood score') + 
-  facet_wrap('ID')
+  res <- rmcorr(data = subset(SHAQ_POMS_byarea, SHAQ_Hab_Area == i),
+                measure1 = mood, 
+                measure2 = POMS_TotalMoodDist_Sum,
+                participant = factor(ID))
   
-
-# corr for SHAQ/POMS with individual 
-test <- lme(fixed = mood_dist ~  mood,
-    data = SHAQ_POMS_byarea %>% na.omit(),
-    random = list(
-      ID = pdDiag(~ 1 )    
-      ))
-summary(test)
-
-# shifted correlation; prediction of prev. week SHAQ to next week POMS
-
-SHAQ_POMS_corr_lag <- SHAQ_POMS_byarea %>% subset(SHAQ_Hab_Area == 1) %>% 
-  group_split(ID) %>% 
-  map(~ .x %>% 
-        mutate_at(vars(mood, mood_dist), replace_na, 0) %>% 
-        {ccf(.$mood, .$mood_dist, lag = 2)})
-
-##### ARCHIVE - spearmans's correlations with interpreted POMS data #####
-# 1 sleep
-# 2 hygiene
-# 3 work
-# 4 kitchen
-
-# construct combined dataframe for SHAQ and POMS to have shared hab area values
-SHAQ_POMS_byarea <- left_join(SHAQ_HERA_short, POMS_interp, by = c("Campaign","Mission","ID","MissionDay"))
-
-# create empty correlation df to fill in
-# for each habitat area; 4 areas by 2 values (correlation coeff + p value)
-corr_SHAQ_POMS <- data.frame(matrix(ncol = 5, nrow = 2))
-names(corr_SHAQ_POMS) <- c("Sleep","Hygiene","Work","Kitchen","Overall") # col names
-rownames(corr_SHAQ_POMS) <- c("corr coeff", "p-value")
-
-
-# using baselined data for SHAQ and POMS
-# combining C5 + C6
-for (i in 1:4){
-  res <- cor.test((subset(SHAQ_POMS_byarea, SHAQ_Hab_Area == i)$mood), 
-                  subset(SHAQ_POMS_byarea, SHAQ_Hab_Area == i)$mood_dist,
-                  # method = "pearson") # if using pearson's r
-                  method = "spearman", exact=F) # if using spearman's rho
-  corr_SHAQ_POMS[1,i] <- res$estimate
-  corr_SHAQ_POMS[2,i] <- res$p.value
+  corr_SHAQ_POMS[1,i] <- res$r
+  corr_SHAQ_POMS[2,i] <- res$p
 }
 
 
@@ -372,72 +284,26 @@ SHAQ_totalhab <- SHAQ_HERA_short %>%
   distinct(ID, .keep_all = TRUE)
 
 # build dataframe keeping campaigns/missions/id/missionday present in SHAQ
-SHAQ_POMS_totalhab <- left_join(SHAQ_totalhab, POMS_interp, by = c("Campaign","Mission","ID","MissionDay"))
+SHAQ_POMS_totalhab <- left_join(SHAQ_totalhab, POMS_HERA_select, by = c("Campaign","Mission","ID","MissionDay"))
 
 # pearsons's correlation for two mood vectors
-res <- cor.test(SHAQ_POMS_totalhab$mood_mean, # SHAQ hab total average
-                SHAQ_POMS_totalhab$MoodTotal_mean, # POMS mood dist
-                # method = "pearson") # if using pearson's r
-                method = "spearman", exact=F) # if using spearman's rho
-corr_SHAQ_POMS[1,5] <- res$estimate
-corr_SHAQ_POMS[2,5] <- res$p.value
+res <- res <- rmcorr(data = SHAQ_POMS_totalhab,
+                     measure1 = mood_mean, 
+                     measure2 = POMS_TotalMoodDist_Sum,
+                     participant = factor(ID))
+corr_SHAQ_POMS[1,5] <- res$r
+corr_SHAQ_POMS[2,5] <- res$p
 
+p.adjust(p = corr_SHAQ_POMS[2,], method = "holm")
 
-##### ARCHIVE - standardize datasets #####
-SHAQ_POMS_byarea_std <- SHAQ_POMS_byarea %>% group_by(ID) %>%
-  mutate( # scaling to sd away from the mean when grouped by ID
-    mood = c(scale(mood)),
-    stress = c(scale(stress)),
-    iperf = c(scale(iperf)),
-    teamperf = c(scale(teamperf)),
-    sleep = c(scale(sleep)),
-    social = c(scale(social)),
-    anxiety = c(scale(anxiety)),
-    depression = c(scale(depression)),
-    anger = c(scale(anger)),
-    fatigue = c(scale(fatigue)),
-    vigor = c(scale(vigor)),
-    confusion = c(scale(confusion)),
-    mood_dist = c(scale(mood_dist))
-  ) # %>% replace(is.na(.),0) # replacing with 0 since no deviation from the mean if SD = 0 (dividing by 0)
+##### differences in mood across habitat environments #####
+# lin model for SHAQ
+SHAQ_lme <- lme(data = SHAQ_all %>% na.omit(), fixed = SHAQ_Mood_How ~ Habitat, random = ~ 1 | ID)
+summary(SHAQ_lme)
+emmeans(SHAQ_lme, pairwise ~ Habitat)
 
+# lin model for POMS (only hotel/HERA)
+POMS_lme <- lme(data = POMS_all %>% na.omit(), fixed = POMS_TotalMoodDist_Sum ~ Habitat, random = ~ 1 | ID)
+summary(POMS_lme)
+emmeans(POMS_lme, pairwise ~ Habitat)
 
-SHAQ_POMS_totalhab_std <- SHAQ_POMS_totalhab %>% group_by(ID) %>%
-  mutate( # scaling to sd away from the mean when grouped by ID
-    mood = c(scale(mood_mean)),
-    stress = c(scale(stress_mean)),
-    iperf = c(scale(iperf_mean)),
-    teamperf = c(scale(teamperf_mean)),
-    sleep = c(scale(sleep_mean)),
-    social = c(scale(social_mean)),
-    anxiety = c(scale(anxiety)),
-    depression = c(scale(depression)),
-    anger = c(scale(anger)),
-    fatigue = c(scale(fatigue)),
-    vigor = c(scale(vigor)),
-    confusion = c(scale(confusion)),
-    mood_dist = c(scale(mood_dist))
-  ) # replacing with 0 since no deviation from the mean if SD = 0 (dividing by 0)
-
-
-##### ARCHIVE - building nlme  #####
-
-# syntax: lme(fixed, data, random)
-# fixed: outcome variable ~ explanatory variable 1 + var 2 + ...
-# random: list(~ 1 + nested var | overarching var) which allows the overarching 
-# random: (~1 | overarching/nested) https://stats.stackexchange.com/questions/48247/mixed-model-specification-with-nlme-in-r
-# variable to have an intercept = account for variation, then also have variation
-# due to nested var within the overarching variable
-
-HERA_lme <- lme(fixed = mood_dist ~  mood_mean + iperf_mean,
-                data = SHAQ_POMS_totalhab %>% na.omit(),
-                random = list(
-                  ID = pdDiag(~ 1 + MissionDay),
-                  Campaign = pdDiag(~ 1)
-                )
-                # original random = (~ 1 + MissionDay | ID) does not converge
-                #control=lmeControl(returnObject=TRUE)
-)
-summary(HERA_lme) # show summary stats
-plot(HERA_lme) # residual plot
-qqnorm(HERA_lme, abline = c(0, 1))
