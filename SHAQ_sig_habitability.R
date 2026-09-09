@@ -1,10 +1,9 @@
 # RQ2: What are the most important aspects of habitability?
 # PCA, linear model, linear mixed-effects model, visualizations
 # Author: Mich Lin shuyulin [at] mit [dot] edu
-# Date created: 03MAR2025 / Date last modified: 22APR2025
+# Date created: 03MAR2025 / Date last modified: 09SEP2026
 
 ##### housekeeping #####
-# packages needed: ggplot2, corrr, ggcorrplot, FactoMineR, factoextra
 # load libraries
 library("readxl")
 library(ggplot2)
@@ -33,7 +32,8 @@ cbPalette <- c("#999999","#E69F00","#56B4E9","#009E73",
 
 ##### load data #####
 # import wide data format (from data_cleaning.R)
-load("~/MIT Dropbox/Mich Lin/Research/behavioral_health/hera_nek/shaq_code/data/wide.RData")
+load("wide.RData")
+PAH_lab <- c("Privacy", "Social","Efficiency","Control","Comfort","Convenience")
 
 ##### data precheck #####
 # linearity
@@ -50,7 +50,7 @@ habitability_moderator_model <- function(df, hab_area, bhp){
   model <- lme(
     fixed = How ~ Why_1 + Why_2 + Why_3 +
       Why_4 + Why_5 + Why_6 + Campaign + (MissionDay),
-    # random = list(ID = pdDiag(~ 1 + MissionDay)),
+    # random = lilmest(ID = pdDiag(~ 1 + MissionDay)),
     random = ~ 1 + MissionDay | ID,
     # fixed = How ~ Why_1 + Why_2 + Why_3 +
     #              Why_4 + Why_5 + Why_6,
@@ -63,6 +63,9 @@ habitability_moderator_model <- function(df, hab_area, bhp){
   
   print(summary(model))
   print(resid(model, type = "normalized"))
+  
+  # plot residuals
+  print(plot(model))
   
   # variance inflation factor (multicollinearity check)
   # PASS; can uncomment for full check 
@@ -106,7 +109,7 @@ ggcorrplot(round(cor(corr_df),2), hc.order = FALSE, type = "lower",
 # 3 work
 # 4 kitchen
 # change variables here
-model_res <- habitability_moderator_model(SHAQ_HERA, 1, "Sleep")
+model_res <- habitability_moderator_model(SHAQ_HERA,3, "TeamPerf")
 print(model_res)
 
 # SLEEP
@@ -244,3 +247,8 @@ ggradar(galley_radar,
         legend.text.size = 18) + 
   theme(plot.margin = margin(0,2,0,2, 'cm'),
         coord_cartesian(clip = "off"))
+
+##### data investigation #####
+# histograms for misbehaving residuals
+hist(SHAQ_HERA %>% subset(SHAQ_Hab_Area == 1 & BHP_Outcome == "Sleep") %>% .$How,
+     main = "", xlab = "")

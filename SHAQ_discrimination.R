@@ -1,10 +1,9 @@
 # RQ3: Are the most important aspects of habitability adequately designed within HERA?
 # Cross habitat environment comparisons (visualizations, ANOVA) by habitat area and by aggregate habitat
 # Author: Mich Lin shuyulin [at] mit [dot] edu
-# Date created: 12MAR2025 / Date last modified: 07FEB2026
+# Date created: 12MAR2025 / Date last modified: 09SEP2026
 
 ##### housekeeping #####
-# packages needed: ggplot2, corrr, ggcorrplot, FactoMineR, factoextra
 # load libraries
 library("readxl")
 library(ggplot2)
@@ -22,13 +21,14 @@ library('FactoMineR')
 library('factoextra')
 library('ggridges')
 library('Hmisc')
+library(emmeans)
 
 # set color palette for ggplot (colorblind accessible)
 cbPalette <- c("#999999","#E69F00","#56B4E9","#009E73",
                "#F0E442","#0072B2","#D55E00","#CC79A7")
 
 # import rawdata.RData
-load("~/MIT Dropbox/Mich Lin/Research/behavioral_health/hera_nek/shaq_code/data/wide.RData")
+load("wide.RData")
 
 SHAQ_HERA <- mutate(SHAQ_HERA, Habitat = "HERA")
 SHAQ_Home <- mutate(SHAQ_Home, Habitat = "Home")
@@ -111,16 +111,16 @@ for (i in why_vec) {
 }
 
 ###### testing for significant differences between mean mood in habitat env #####
-# unit test
+# unit test for estimated marginal means comparison
 # summary(lme(data = subset(SHAQ, SHAQ_Hab_Area == 3 & BHP_Outcome == "Sleep") %>% 
-# na.omit(), fixed = Why_6 ~ Habitat, random = ~ 1 | ID))
+#     na.omit(), fixed = Why_6 ~ Habitat, random = ~ 1 | ID))
+# emmeans_obj <- emmeans(lme(data = subset(SHAQ, SHAQ_Hab_Area == 1 & BHP_Outcome == "Stress") %>% 
+#                              na.omit(), fixed = Why_2 ~ Habitat, random = ~ 1 | ID), pairwise ~ Habitat) %>% summary()
+# emmeans_obj$emmeans$emmean %>% rev()
+# emmeans_obj$emmeans$SE %>% rev()
 
-emmeans_obj <- emmeans(lme(data = subset(SHAQ, SHAQ_Hab_Area == 1 & BHP_Outcome == "Stress") %>% 
-                             na.omit(), fixed = Why_2 ~ Habitat, random = ~ 1 | ID), pairwise ~ Habitat) %>% summary()
-emmeans_obj$emmeans$emmean %>% rev()
-emmeans_obj$emmeans$SE %>% rev()
-
-# generating latex code for paper
+# create subset of HERA data 
+# create estimated means w/ individual repeated measures
 for (env in 1:3){ # iterate over env (home/hotel/HERA)
   for (i in 4:4){ # iterate over habitat areas
     mean_df <- data.frame(matrix(ncol = 6, nrow = 6))
@@ -130,12 +130,14 @@ for (env in 1:3){ # iterate over env (home/hotel/HERA)
         emmeans_obj <- emmeans(lme(data = subset(SHAQ, SHAQ_Hab_Area == i & BHP_Outcome == BHP_vec[j]) %>% 
                                      na.omit(), fixed = as.formula(paste(why_vec[k], "~", "Habitat")), random = ~ 1 | ID), pairwise ~ Habitat) %>% summary()
         
+        # save to mean/sd df
         mean_df[k,j] <- emmeans_obj$emmeans$emmean %>% rev() %>% .[env]
         sd_df[k,j] <- emmeans_obj$emmeans$SE %>% rev() %>% .[env]
         
       }
     }
   }
+  # generating latex code for paper
   if (env == 1){ # printing home
     for (i in 1:6){
       # cat for printing with double slashes
@@ -156,12 +158,13 @@ for (env in 1:3){ # iterate over env (home/hotel/HERA)
   }
 }
 
+# testing for significant differences between habitat environments
 # built function to run lme's and generate list of saved p-values
 # do not apply FWER correction here since adjusting using holm at the end
 PAH_lme <- function(hab_area_i, BHP_i, PAH_i){
   emmeans_obj <- emmeans(lme(data = subset(SHAQ, SHAQ_Hab_Area == hab_area_i & BHP_Outcome == BHP_i) %>% na.omit(), 
                              fixed = as.formula(paste(PAH_i, "~", "Habitat")), 
-                             random = ~ 1 | ID), pairwise ~ Habitat, adjust = "tukey") %>% 
+                             random = ~ 1 | ID), pairwise ~ Habitat, adjust = "none") %>% 
     summary()
   # extract p values from summary
   labels <- emmeans_obj$contrasts$contrast
@@ -172,24 +175,27 @@ PAH_lme <- function(hab_area_i, BHP_i, PAH_i){
   return(list(p_values = p_vals))
 }
 
-# run through all combinations to get raw p values
+# empty list to save to
 all_p_values <- list()
 
+# run through all combinations to get raw p values
 # iterate through combinations to save p values to list
 for (i in 1:4){ # iterate over habitat areas
   for (j in 1:6){ # iterate over BHP outcomes
     for (k in 1:6){ # iterate over why's
+      # generate model/p-values
       model_res <- PAH_lme(i, BHP_vec[j], why_vec[k])
       
+      # save this under the analysis combination name in the list
       analysis_name <- paste(i, BHP_vec[j], why_vec[k], sep = "_")
       all_p_values[[analysis_name]] <- list(
-        p_tukey = model_res$p_values
+        p_val = model_res$p_values
       )
     }
   }
 }
 
 # holm adjusted p values over the whole list
-adjusted_p_values_holm <- p.adjust(unlist(lapply(all_p_values, function(x) c(x$p_tukey))), 
+adjusted_p_values_holm <- p.adjust(unlist(lapply(all_p_values, function(x) c(x$p_val))), 
                                    method = "holm") 
-adjusted_p_values_holm < 0.05
+adjusted_p_values_holm < 0.05 # display true/false for easier read
