@@ -16,6 +16,7 @@ library(tidyr)
 library(magrittr)
 library(ggridges)
 library(rmcorr)
+library(emmeans)
 
 # set color palette for ggplot (colorblind accessible)
 cbPalette <- c("#999999","#E69F00","#56B4E9","#009E73",
